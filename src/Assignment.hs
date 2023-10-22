@@ -163,8 +163,29 @@ jsonTernary = do
   charTok ')'
   return $ JsonTernary condition trueExpr falseExpr
 
+atomicExpression :: Parser ADT
+atomicExpression = jsonString <|> jsonBool <|> jsonNumber
+
+compositeExpression :: Parser ADT
+compositeExpression = 
+    jsonTernary <|>
+    jsonNot <|>
+    jsonAnd <|>
+    jsonOr <|>
+    jsonAdd <|>
+    jsonSubtract <|>
+    jsonMultiply <|>
+    jsonDivide <|>
+    jsonPower <|>
+    jsonEquals <|>
+    jsonNotEquals <|>
+    jsonGreaterThan <|>
+    jsonLessThan <|>
+    jsonList <|>
+    atomicExpression
+
 parseExerciseA :: Parser ADT
-parseExerciseA = jsonNumber <|> jsonBool <|> jsonList <|> jsonNot <|> jsonAnd <|> jsonOr <|> jsonAdd <|> jsonSubtract <|> jsonMultiply <|> jsonDivide <|> jsonPower <|> jsonEquals <|> jsonNotEquals <|> jsonGreaterThan <|> jsonLessThan <|> jsonTernary <|> jsonString 
+parseExerciseA = compositeExpression
 
 class MultiLineA a where
     shouldUseMultiline :: a -> Bool
@@ -331,7 +352,7 @@ functionNameParser :: Parser String
 functionNameParser = some (satisfy isAlphaNum)
 
 argumentParser :: Parser ADT
-argumentParser = parseExerciseA
+argumentParser = parseExerciseA <|> JsonString <$> functionNameParser
 
 jsonReturn :: Parser ADT
 jsonReturn = do
@@ -341,13 +362,27 @@ jsonReturn = do
     _ <- charTok ';'
     return $ JsonReturn expr
 
+-- Util function to handle spaces before and after a given parser
+spacesAround :: Parser a -> Parser a
+spacesAround p = do
+    spaces
+    result <- p
+    spaces
+    return result
+
+-- Modified jsonFunctionCall to follow the provided logic
+-- Temporarily comment out the original definition
+-- jsonFunctionCall = ...
+
+-- Use a stubbed version just for the sake of compiling
 jsonFunctionCall :: Parser ADT
 jsonFunctionCall = do
-    fname <- functionNameParser
-    _ <- charTok '('
-    args <- sepBy (charTok ',') argumentParser
-    _ <- charTok ')'
+    fname <- spacesAround functionNameParser
+    _ <- spacesAround (charTok '(')
+    args <- sepBy argumentParser (spacesAround (charTok ','))
+    _ <- spacesAround (charTok ')')
     return $ JsonFunctionCall fname args
+
 
 jsonFunction :: Parser ADT
 jsonFunction = do
@@ -400,10 +435,10 @@ instance MultiLineC ADT where
         simplePrintC (JsonFunction _ _ body) =
           prettyPrintExerciseC body
         simplePrintC other = prettyPrintExerciseC other
-
+        
 prettyPrintFunctionCall :: ADT -> String
 prettyPrintFunctionCall (JsonFunctionCall name args) = 
-    name ++ "(" ++ (concat . intersperse ", " $ map prettyPrintExerciseA args) ++ ")"
+    name ++ "(" ++ (concat . intersperse ", " $ map prettyPrintExerciseA args) ++ ");"
 
 prettyPrintFunction :: ADT -> String
 prettyPrintFunction func@(JsonFunction name params body) 
