@@ -480,7 +480,7 @@ prettyPrintBlock other = prettyPrintExerciseC other
 
 prettyPrintExerciseC :: ADT -> String
 prettyPrintExerciseC (JsonFunctionCall fname args) =
-    fname ++ "(" ++ intercalate ", " (map prettyPrintExerciseA args) ++ ")"
+    fname ++ "(" ++ intercalate ", " (map prettyPrintExerciseA args) ++ ");"
 prettyPrintExerciseC (JsonFunction name args body) =
   let header = "function " ++ name ++ "(" ++ intercalate ", " args ++ ") "
       isMultiline = shouldUseMultilineC body
