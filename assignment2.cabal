@@ -39,6 +39,18 @@ library
       base >=4.7 && <5
   default-language: Haskell2010
 
+executable main
+  main-is: Main.hs
+  other-modules:
+      Paths_assignment2
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Werror -threaded -rtsopts -with-rtsopts=-N -Wno-implicit-prelude -Wno-prepositive-qualified-module -Wno-missing-deriving-strategies -Wno-missing-safe-haskell-mode -Wno-missing-kind-signatures -Wno-unused-top-binds -Wno-unused-matches
+  build-depends:
+      assignment2
+    , base >=4.7 && <5
+  default-language: Haskell2010
+
 test-suite batch
   type: exitcode-stdio-1.0
   main-is: Spec.hs

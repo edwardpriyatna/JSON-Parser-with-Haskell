@@ -11,6 +11,7 @@ import Instances
 import Parser
 import Control.Applicative
 import Data.Char
+import Data.List
 
 data ADT = Empty
           |JsonNumber Int
@@ -34,18 +35,15 @@ data ADT = Empty
           |JsonConsts [ADT]
           |JsonBlock [ADT]
           |JsonIfElse ADT ADT [ADT]
+          |JsonFunctionCall String [ADT]
+          |JsonReturn ADT
+          |JsonFunction String [String] ADT
           deriving (Eq, Show)
 
 -- | Exercise A
 
-parseChar :: Char -> Parser Char
-parseChar x = char >>= \y ->
-  if x == y
-    then return y
-    else Parser $ \input -> Error (UnexpectedChar y)
-
 parseString :: String -> Parser String
-parseString = traverse parseChar
+parseString = traverse charTok
 
 parseSpan :: (Char -> Bool) -> Parser String
 parseSpan f =
@@ -53,36 +51,11 @@ parseSpan f =
     let (token, rest) = span f input
      in Result rest token
 
-jsonNumber :: Parser ADT
-jsonNumber = JsonNumber <$> int
-    
 stringBody :: Parser String
 stringBody = parseSpan (/= '"')
 
-jsonString :: Parser ADT
-jsonString = JsonString <$> (parseString "" *> stringBody <* parseString "")
-
-jsonBool :: Parser ADT
-jsonBool = f <$> (parseString "true" <|> parseString "false")
-  where
-    f "true" = JsonBool True
-    f "false" = JsonBool False
-
 sepBy :: Parser a -> Parser b -> Parser [b]
 sepBy sep element = (:) <$> element <*> many (sep *> element) <|> pure []
-
-jsonList :: Parser ADT
-jsonList = JsonList <$> (charTok '[' *> elements <* charTok ']')
-  where
-    elements = sepBy (charTok ',') (spaces *> parseExerciseA <* spaces)
-
-intercalate :: [a] -> [[a]] -> [a]
-intercalate _ [] = []
-intercalate _ [x] = x
-intercalate sep (x:xs) = x ++ sep ++ intercalate sep xs
-
-prettyPrintList :: [ADT] -> String
-prettyPrintList elements = "[" ++ intercalate ", " (map prettyPrintExerciseA elements) ++ "]"
 
 jsonNotOperator :: Char -> (ADT -> ADT) -> Parser ADT
 jsonNotOperator operatorSymbol constructor = do
@@ -119,6 +92,23 @@ jsonStringOperator operatorSymbol constructor = do
   spaces
   charTok ')'
   return $ constructor expr1 expr2
+
+jsonNumber :: Parser ADT
+jsonNumber = JsonNumber <$> int
+    
+jsonString :: Parser ADT
+jsonString = JsonString <$> (parseString "" *> stringBody <* parseString "")
+
+jsonBool :: Parser ADT
+jsonBool = f <$> (parseString "true" <|> parseString "false")
+  where
+    f "true" = JsonBool True
+    f "false" = JsonBool False
+
+jsonList :: Parser ADT
+jsonList = JsonList <$> (charTok '[' *> elements <* charTok ']')
+  where
+    elements = sepBy (charTok ',') (spaces *> parseExerciseA <* spaces)
 
 jsonNot :: Parser ADT
 jsonNot = jsonNotOperator '!' JsonNot
@@ -176,6 +166,21 @@ jsonTernary = do
 parseExerciseA :: Parser ADT
 parseExerciseA = jsonNumber <|> jsonBool <|> jsonList <|> jsonNot <|> jsonAnd <|> jsonOr <|> jsonAdd <|> jsonSubtract <|> jsonMultiply <|> jsonDivide <|> jsonPower <|> jsonEquals <|> jsonNotEquals <|> jsonGreaterThan <|> jsonLessThan <|> jsonTernary <|> jsonString 
 
+class MultiLineA a where
+    shouldUseMultiline :: a -> Bool
+instance MultiLineA ADT where
+    shouldUseMultiline (JsonTernary condition trueExpr falseExpr) =
+        let conditionStr = prettyPrintExerciseA condition
+            trueExprStr = prettyPrintExerciseA trueExpr
+            falseExprStr = prettyPrintExerciseA falseExpr
+            combinedStr = conditionStr ++ trueExprStr ++ falseExprStr
+            strLength = length combinedStr
+        in strLength > 42
+    shouldUseMultiline _ = False
+
+prettyPrintList :: [ADT] -> String
+prettyPrintList elements = "[" ++ intercalate ", " (map prettyPrintExerciseA elements) ++ "]"
+
 prettyPrintExerciseA :: ADT -> String
 prettyPrintExerciseA (JsonNumber n) = show n
 prettyPrintExerciseA (JsonString s) = show s
@@ -200,7 +205,7 @@ prettyPrintExerciseA (JsonTernary condition trueExpr falseExpr) =
       falseExprStr = prettyPrintExerciseA falseExpr
       combinedStr = conditionStr ++ trueExprStr ++ falseExprStr
       strLength = length combinedStr
-      isMultiline = strLength > 42
+      isMultiline = shouldUseMultiline (JsonTernary condition trueExpr falseExpr)
       newlineBeforeQuestion = if isMultiline then "\n" else ""
       newlineBeforeColon = if isMultiline then "\n" else ""
   in
@@ -211,6 +216,20 @@ prettyPrintExerciseA (JsonTernary condition trueExpr falseExpr) =
 
 isVarName :: Char -> Bool
 isVarName c = isAlphaNum c || c == '_'
+
+statement :: Parser ADT
+statement = jsonConst <|> jsonIfElse <|> jsonBlock
+simpleCondition :: Parser ADT
+simpleCondition = do
+    cond <- parseExerciseA
+    return cond
+
+falseBlockOption :: Parser ADT
+falseBlockOption = do
+    _ <- parseString "else"
+    spaces
+    block <- jsonBlock
+    return block
 
 jsonConst :: Parser ADT
 jsonConst = do
@@ -230,44 +249,12 @@ jsonConsts = do
   consts <- sepBy spaces jsonConst
   return $ JsonConsts consts
 
-statement :: Parser ADT
-statement = jsonConst 
-
 jsonBlock :: Parser ADT
 jsonBlock = do
     _ <- charTok '{'
     statements <- sepBy spaces statement
     _ <- charTok '}'
     return $ JsonBlock statements
-
-isMultiline :: ADT -> Bool
-isMultiline adt = length (prettyPrintExerciseB adt) > 42 || hasMultipleChildren adt || anyChildIsMultiline adt
-  where
-    hasMultipleChildren (JsonBlock stmts) = length stmts > 1
-    hasMultipleChildren _                 = False
-
-    anyChildIsMultiline (JsonBlock stmts) = any isMultiline stmts
-    anyChildIsMultiline _                 = False
-
-prettyPrintJsonBlock :: [ADT] -> String
-prettyPrintJsonBlock adts
-    | isMultilineBlock = "{\n" ++ unlines (map (\adt -> "  " ++ prettyPrintExerciseB adt) adts) ++ "}"
-    | otherwise        = "{ " ++ intercalate " " (map prettyPrintExerciseB adts) ++ " }"
-  where
-    isMultilineBlock = any isMultiline adts || length combined > 42 || length adts > 1
-    combined = concatMap prettyPrintExerciseB adts
-
-simpleCondition :: Parser ADT
-simpleCondition = do
-    cond <- parseExerciseA
-    return cond
-
-falseBlockOption :: Parser ADT
-falseBlockOption = do
-    _ <- parseString "else"
-    spaces
-    block <- jsonBlock
-    return block
   
 jsonIfElse :: Parser ADT
 jsonIfElse = do
@@ -285,49 +272,52 @@ jsonIfElse = do
                         Nothing  -> []
     return $ JsonIfElse condition trueBlock falseBlocks
 
-shouldUseMultiline :: ADT -> Bool
-shouldUseMultiline adt = isMultiline adt
+parseExerciseB :: Parser ADT
+parseExerciseB = jsonIfElse <|> jsonBlock <|> jsonConsts 
+
+class MultiLineB b where
+    shouldUseMultilineB :: b -> Bool
+instance MultiLineB ADT where
+    shouldUseMultilineB adt = length (simplePrintB adt) > 42
+      where
+        simplePrintB (JsonTernary condition trueExpr falseExpr) =
+          prettyPrintExerciseB condition ++
+          prettyPrintExerciseB trueExpr ++
+          prettyPrintExerciseB falseExpr
+        simplePrintB other = prettyPrintExerciseB other
+
+prettyPrintJsonBlock :: [ADT] -> String
+prettyPrintJsonBlock adts
+    | isMultilineBlock = "{\n" ++ unlines (map (\adt -> "  " ++ prettyPrintExerciseB adt ++ ";") adts) ++ "}"
+    | otherwise        = "{ " ++ intercalate "; " (map prettyPrintExerciseB adts) ++ (if not (null adts) then "; " else "") ++ "}"
+  where
+    isMultilineBlock = any shouldUseMultilineB adts || length adts > 1
+    combined = concatMap prettyPrintExerciseB adts
 
 prettyPrintContents :: [ADT] -> String
 prettyPrintContents adts = "{\n" ++ unlines (map (\adt -> "  " ++ prettyPrintExerciseB adt) adts) ++ "\n}"
 
 prettyPrintInlineContents :: [ADT] -> String
-prettyPrintInlineContents adts = "{ " ++ intercalate " " (map prettyPrintExerciseB adts) ++ " }"
+prettyPrintInlineContents adts = "{ " ++ intercalate "; " (map prettyPrintExerciseB adts) ++ " }"
 
 prettyPrintBlockOrContent :: ADT -> String
-prettyPrintBlockOrContent (JsonBlock adts)
-    | shouldUseMultiline (JsonBlock adts) = prettyPrintContents adts
-    | otherwise = prettyPrintInlineContents adts
-prettyPrintBlockOrContent other = prettyPrintJsonBlock [other]
+prettyPrintBlockOrContent adt@(JsonBlock _) = prettyPrintExerciseB adt
+prettyPrintBlockOrContent adt
+    | shouldUseMultilineB adt = prettyPrintContents [adt]
+    | otherwise               = prettyPrintInlineContents [adt]
 
 prettyPrintIfElse :: ADT -> String
 prettyPrintIfElse (JsonIfElse condition trueBlock []) =
-    let 
-        condStr = prettyPrintExerciseA condition
-        trueStr = prettyPrintBlockOrContent trueBlock
-    in
-        if shouldUseMultiline condition || shouldUseMultiline trueBlock then
-            "if ( " ++ condStr ++ " )\n{\n  " ++ trueStr ++ "\n}"
-        else
-            "if ( " ++ condStr ++ " ) { " ++ trueStr ++ " }"
-
+    "if ( " ++ prettyPrintExerciseA condition ++ " ) " ++ prettyPrintBlockOrContent trueBlock
 prettyPrintIfElse (JsonIfElse condition trueBlock falseBlocks) =
-    let 
-        condStr = prettyPrintExerciseA condition
-        trueStr = prettyPrintBlockOrContent trueBlock
-        falseStr = prettyPrintBlockOrContent (head falseBlocks)
-    in
-        if shouldUseMultiline condition || shouldUseMultiline trueBlock || any shouldUseMultiline falseBlocks then
-            "if ( " ++ condStr ++ " )\n{\n  " ++ trueStr ++ "\n}\nelse\n{\n  " ++ falseStr ++ "\n}"
-        else
-            "if ( " ++ condStr ++ " ) { " ++ trueStr ++ " } else { " ++ falseStr ++ " }"
-
-parseExerciseB :: Parser ADT
-parseExerciseB = jsonIfElse <|> jsonBlock <|> jsonConsts 
+    "if ( " ++ prettyPrintExerciseA condition ++ " ) "
+    ++ prettyPrintBlockOrContent trueBlock
+    ++ (if shouldUseMultilineB trueBlock || any shouldUseMultilineB falseBlocks then "\n" else " ")
+    ++ "else " ++ prettyPrintBlockOrContent (head falseBlocks)
 
 prettyPrintExerciseB :: ADT -> String
 prettyPrintExerciseB (JsonConst (JsonString name) value) =
-  "const " ++ name ++ " = " ++ prettyPrintExerciseA value ++ ";"
+  "const " ++ name ++ " = " ++ prettyPrintExerciseA value
 prettyPrintExerciseB (JsonConsts consts) =
   intercalate "\n" (map prettyPrintExerciseB consts)
 prettyPrintExerciseB (JsonBlock adts) = prettyPrintJsonBlock adts
@@ -337,15 +327,102 @@ prettyPrintExerciseB other = prettyPrintExerciseA other
 
 -- | Exercise C
 
--- This function should determine if the given code is a tail recursive function
-isTailRecursive :: String -> Bool
-isTailRecursive _ = False
+functionNameParser :: Parser String
+functionNameParser = some (satisfy isAlphaNum)
+
+argumentParser :: Parser ADT
+argumentParser = parseExerciseA
+
+jsonReturn :: Parser ADT
+jsonReturn = do
+    _ <- string "return"
+    _ <- spaces
+    expr <- parseExerciseA
+    _ <- charTok ';'
+    return $ JsonReturn expr
+
+jsonFunctionCall :: Parser ADT
+jsonFunctionCall = do
+    fname <- functionNameParser
+    _ <- charTok '('
+    args <- sepBy (charTok ',') argumentParser
+    _ <- charTok ')'
+    return $ JsonFunctionCall fname args
+
+jsonFunction :: Parser ADT
+jsonFunction = do
+    _ <- stringTok "function"
+    fname <- functionNameParser
+    _ <- charTok '('
+    params <- sepBy (charTok ',') functionNameParser
+    _ <- charTok ')'
+    body <- jsonBlock
+    return $ JsonFunction fname params body
 
 parseExerciseC :: Parser ADT
-parseExerciseC = pure Empty
+parseExerciseC = jsonFunctionCall <|> jsonFunction
+
+extractReturns :: ADT -> [ADT]
+extractReturns (JsonReturn expr) = [expr]
+extractReturns (JsonBlock stmts) = concatMap extractReturns stmts
+extractReturns _ = []
+
+hasFunctionCalls :: ADT -> Bool
+hasFunctionCalls (JsonFunctionCall _ _) = True
+hasFunctionCalls (JsonBlock stmts) = any hasFunctionCalls stmts
+hasFunctionCalls (JsonFunction _ _ body) = hasFunctionCalls body
+hasFunctionCalls _ = False
+
+isRecursiveCall :: String -> ADT -> Bool
+isRecursiveCall fname (JsonFunctionCall name args) = name == fname
+isRecursiveCall _ _ = False
+
+-- This function should determine if the given code is a tail recursive function
+isTailRecursive :: String -> Bool
+isTailRecursive contents =
+    case parse parseExerciseC contents of
+        Result _ adt -> isTailRecursiveADT adt
+        _            -> False
+
+isTailRecursiveADT :: ADT -> Bool
+isTailRecursiveADT (JsonFunction fname params body) = 
+    let returns = extractReturns body 
+        nonRecursiveReturns = filter (not . isRecursiveCall fname) returns
+        recursiveReturns = filter (isRecursiveCall fname) returns
+    in null nonRecursiveReturns && length recursiveReturns == 1
+isTailRecursiveADT _ = False
+
+class MultiLineC c where
+    shouldUseMultilineC :: c -> Bool
+instance MultiLineC ADT where
+    shouldUseMultilineC adt = length (simplePrintC adt) > 42
+      where
+        simplePrintC (JsonFunction _ _ body) =
+          prettyPrintExerciseC body
+        simplePrintC other = prettyPrintExerciseC other
+
+prettyPrintFunctionCall :: ADT -> String
+prettyPrintFunctionCall (JsonFunctionCall name args) = 
+    name ++ "(" ++ (concat . intersperse ", " $ map prettyPrintExerciseA args) ++ ")"
+
+prettyPrintFunction :: ADT -> String
+prettyPrintFunction func@(JsonFunction name params body) 
+    | isTailRecursive (prettyPrintExerciseC func) = 
+        "function " ++ name ++ "(" ++ (concat . intersperse ", " $ params) ++ ") {\n  while(true) {\n" ++ 
+        (unlines . map ("    " ++) . lines $ prettyPrintExerciseB body) ++ 
+        "  }\n}"
+    | otherwise = 
+        "function " ++ name ++ "(" ++ (concat . intersperse ", " $ params) ++ ") " ++ prettyPrintExerciseB body
 
 prettyPrintExerciseC :: ADT -> String
-prettyPrintExerciseC _ = "You must write a pretty printer!"
+prettyPrintExerciseC (JsonFunction name args body) =
+  let header = "function " ++ name ++ "(" ++ intercalate ", " args ++ ") "
+      isMultiline = shouldUseMultilineC body
+      bodyPrint
+        | isMultiline = "{\n" ++ (unlines . map ("  " ++) . lines $ prettyPrintExerciseC body) ++ "}"
+        | otherwise   = "{ " ++ prettyPrintExerciseC body ++ " }"
+  in header ++ bodyPrint
+prettyPrintExerciseC other = prettyPrintExerciseB other
 
 main :: IO ()
 main = do

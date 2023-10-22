@@ -49,6 +49,7 @@ library:
     - -Wno-unused-top-binds
     - -Wno-unused-matches
 
+    # - -Werror
   default-extensions:
     - InstanceSigs
 
@@ -62,4 +63,28 @@ tests:
       - Glob
       - doctest
       - filepath
+      - assignment2
+
+executables:
+  main:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+      - -Wall
+      - -Werror
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+
+      # Disable warnings that are unnecessary
+      - -Wno-implicit-prelude
+      - -Wno-prepositive-qualified-module
+      - -Wno-missing-deriving-strategies
+      - -Wno-missing-safe-haskell-mode
+      - -Wno-missing-kind-signatures
+
+      # Disable warnings that are inconvenient
+      - -Wno-unused-top-binds
+      - -Wno-unused-matches
+    dependencies:
       - assignment2

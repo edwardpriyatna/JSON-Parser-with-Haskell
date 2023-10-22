@@ -7,8 +7,8 @@ import Control.Applicative (Alternative (..))
 import qualified Numeric as N
 
 -- $setup
--- >>> let p = \n -> Parser (\x -> Result x n)
--- >>> let add = \n -> \m -> Parser (\x -> Result x (n+m))
+-- >>> let p = \n -> P (\x -> Result x n)
+-- >>> let add = \n -> \m -> P (\x -> Result x (n+m))
 
 data ParseError
   = UnexpectedEof
@@ -29,7 +29,7 @@ newtype Parser a = Parser {parse :: Input -> ParseResult a}
 -- Result Instances
 
 instance Show a => Show (ParseResult a) where
-  show :: ParseResult a -> String
+  show :: Show a => ParseResult a -> String
   show (Result i a) = "Result >" ++ i ++ "< " ++ show a
   show (Error UnexpectedEof) = "Unexpected end of stream"
   show (Error (UnexpectedChar c)) = "Unexpected character: " ++ show [c]
@@ -44,12 +44,12 @@ instance Functor ParseResult where
 
 -- Parser Instances
 
--- | Functor instance for a parser
+-- | Functor instance for a paser
 --
--- >>> parse ((+1) <$> Parser (`Result` 1)) "hello"
+-- >>> parse ((+1) <$> P (`Result` 1)) "hello"
 -- Result >hello< 2
 
---  >>> parse ((+1) <$> Parser (const (Error UnexpectedEof))) "hello"
+--  >>> parse ((+1) <$> P (const (Error UnexpectedEof))) "hello"
 -- Unexpected end of stream
 instance Functor Parser where
   fmap :: (a -> b) -> Parser a -> Parser b
@@ -69,10 +69,10 @@ instance Monad Parser where
 
 -- |
 --
--- >>> parse (Parser (`Result` (+1)) <*> Parser (`Result` 1)) "hello"
+-- >>> parse (P (`Result` (+1)) <*> P (`Result` 1)) "hello"
 -- Result >hello< 2
 --
--- >>> parse (pure (+1) <*> Parser (`Result` 1)) "hello"
+-- >>> parse (pure (+1) <*> P (`Result` 1)) "hello"
 -- Result >hello< 2
 --
 -- >>> parse (pure (+1) <*> (pure 1 :: Parser Int)) "hello"
@@ -104,10 +104,11 @@ instance Applicative Parser where
 --
 -- see https://tgdwyer.github.io/haskell3/#alternative
 --
--- >>> parse (pure 1 <|> empty) "world, hello!"
--- Result >world, hello!< 1
--- >>> parse (empty <|> pure 1) "world"
--- Result >world< 1
+-- >>> parse (int <|> pure 0) "123abc"
+--
+-- >>> parse (is 'h' <|> is 'w') "world, hello!"
+--
+-- >>> parse (int <|> empty) "world"
 instance Alternative Parser where
   empty :: Parser a
   empty = Parser $ const (Error UnexpectedEof)

@@ -230,7 +230,6 @@ input:checked + .slider:before {
   border-color: #121619;
   border-width: 2px;
   padding: 5px;
-  width: 100%
 }
 
 embed {

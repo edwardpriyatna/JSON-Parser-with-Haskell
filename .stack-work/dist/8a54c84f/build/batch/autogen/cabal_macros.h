@@ -163,7 +163,7 @@
 #endif /* MIN_TOOL_VERSION_strip */
 
 #ifndef CURRENT_COMPONENT_ID
-#define CURRENT_COMPONENT_ID "assignment2-0.1.0.0-E1ZqkG4IEKIFvqLfR4DPsI-batch"
+#define CURRENT_COMPONENT_ID "assignment2-0.1.0.0-LSdXwP3xgsaKC7qEba34j6-batch"
 #endif /* CURRENT_COMPONENT_ID */
 #ifndef CURRENT_PACKAGE_VERSION
 #define CURRENT_PACKAGE_VERSION "0.1.0.0"
