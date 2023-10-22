@@ -14,26 +14,26 @@ import Data.Char
 import Data.List
 
 data ADT = Empty
-          |JsonNumber Int
-          |JsonString String
-          |JsonBool Bool
-          |JsonList [ADT]
-          |JsonNot ADT
-          |JsonAnd ADT ADT
-          |JsonOr ADT ADT
-          |JsonAdd ADT ADT
-          |JsonSubtract ADT ADT
-          |JsonMultiply ADT ADT
-          |JsonDivide ADT ADT
-          |JsonPower ADT ADT
-          |JsonEquals ADT ADT
-          |JsonNotEquals ADT ADT
-          |JsonGreaterThan ADT ADT
-          |JsonLessThan ADT ADT
-          |JsonTernary ADT ADT ADT
-          |JsonConst ADT ADT
-          |JsonConsts [ADT]
-          |JsonBlock [ADT]
+          |JsNum Int
+          |JsStr String
+          |JsBool Bool
+          |JsList [ADT]
+          |JsNot ADT
+          |JsAnd ADT ADT
+          |JsOr ADT ADT
+          |JsAdd ADT ADT
+          |JsSub ADT ADT
+          |JsMul ADT ADT
+          |JsDiv ADT ADT
+          |JsPow ADT ADT
+          |JsEq ADT ADT
+          |JsNotEquals ADT ADT
+          |JsGt ADT ADT
+          |JsLt ADT ADT
+          |JsTernary ADT ADT ADT
+          |JsConst ADT ADT
+          |JsConsts [ADT]
+          |JsBlock [ADT]
           |JsonIfElse ADT ADT [ADT]
           |JsonFunctionCall String [ADT]
           |JsonReturn ADT
@@ -42,21 +42,26 @@ data ADT = Empty
 
 -- | Exercise A
 
+-- | Parse a specific string (used for reserved words or operators)
 parseString :: String -> Parser String
 parseString = traverse charTok
 
+-- | Parse a span of characters that satisfy a predicate `f`
 parseSpan :: (Char -> Bool) -> Parser String
 parseSpan f =
   Parser $ \input ->
     let (token, rest) = span f input
      in Result rest token
 
+-- | Parse a string body, stopping when encountering a double quote
 stringBody :: Parser String
 stringBody = parseSpan (/= '"')
 
+-- | Parse zero or more occurrences of an element separated by a separator
 sepBy :: Parser a -> Parser b -> Parser [b]
 sepBy sep element = (:) <$> element <*> many (sep *> element) <|> pure []
 
+-- | Helper function for parsing unary operators such as '!'
 jsonNotOperator :: Char -> (ADT -> ADT) -> Parser ADT
 jsonNotOperator operatorSymbol constructor = do
   charTok '('
@@ -67,6 +72,7 @@ jsonNotOperator operatorSymbol constructor = do
   charTok ')'
   return (constructor expr)
 
+-- | Helper function for parsing binary operators such as '+' and '-' 
 jsonCharOperator :: Char -> (ADT -> ADT -> ADT) -> Parser ADT
 jsonCharOperator operatorSymbol constructor = do
   charTok '('
@@ -80,71 +86,78 @@ jsonCharOperator operatorSymbol constructor = do
   charTok ')'
   return $ constructor expr1 expr2
 
+-- | Helper function for parsing binary operators that are strings like '&&', '||', etc.
 jsonStringOperator :: String -> (ADT -> ADT -> ADT) -> Parser ADT
 jsonStringOperator operatorSymbol constructor = do
   charTok '('
   spaces
   expr1 <- parseExerciseA
   spaces
-  parseString operatorSymbol  -- Parse the operator as a string
+  parseString operatorSymbol
   spaces
   expr2 <- parseExerciseA
   spaces
   charTok ')'
   return $ constructor expr1 expr2
 
+-- | Parsers for different JSON constructs
+
 jsonNumber :: Parser ADT
-jsonNumber = JsonNumber <$> int
+jsonNumber = JsNum <$> int
     
 jsonString :: Parser ADT
-jsonString = JsonString <$> (parseString "" *> stringBody <* parseString "")
+jsonString = 
+  (JsStr <$> (charTok '"' *> (stringBody <|> pure "") <* charTok '"')) 
+  <|> 
+  (JsStr <$> parseSpan isVarName)
 
 jsonBool :: Parser ADT
 jsonBool = f <$> (parseString "true" <|> parseString "false")
   where
-    f "true" = JsonBool True
-    f "false" = JsonBool False
+    f "true" = JsBool True
+    f "false" = JsBool False
 
 jsonList :: Parser ADT
-jsonList = JsonList <$> (charTok '[' *> elements <* charTok ']')
+jsonList = JsList <$> (charTok '[' *> elements <* charTok ']')
   where
     elements = sepBy (charTok ',') (spaces *> parseExerciseA <* spaces)
 
+-- | Parsers for JSON operations
 jsonNot :: Parser ADT
-jsonNot = jsonNotOperator '!' JsonNot
+jsonNot = jsonNotOperator '!' JsNot
 
 jsonAnd :: Parser ADT
-jsonAnd = jsonStringOperator "&&" JsonAnd
+jsonAnd = jsonStringOperator "&&" JsAnd
 
 jsonOr :: Parser ADT
-jsonOr = jsonStringOperator "||" JsonOr
+jsonOr = jsonStringOperator "||" JsOr
 
 jsonAdd :: Parser ADT
-jsonAdd = jsonCharOperator '+' JsonAdd
+jsonAdd = jsonCharOperator '+' JsAdd
 
 jsonSubtract :: Parser ADT
-jsonSubtract = jsonCharOperator '-' JsonSubtract
+jsonSubtract = jsonCharOperator '-' JsSub
 
 jsonMultiply :: Parser ADT
-jsonMultiply = jsonCharOperator '*' JsonMultiply
+jsonMultiply = jsonCharOperator '*' JsMul
 
 jsonDivide :: Parser ADT
-jsonDivide = jsonCharOperator '/' JsonDivide
+jsonDivide = jsonCharOperator '/' JsDiv
 
 jsonPower :: Parser ADT
-jsonPower = jsonStringOperator "**" JsonPower
+jsonPower = jsonStringOperator "**" JsPow
 
 jsonEquals :: Parser ADT
-jsonEquals = jsonStringOperator "===" JsonEquals
+jsonEquals = jsonStringOperator "===" JsEq
 
 jsonNotEquals :: Parser ADT
-jsonNotEquals = jsonStringOperator "!==" JsonNotEquals
+jsonNotEquals = jsonStringOperator "!==" JsNotEquals
 
 jsonGreaterThan :: Parser ADT
-jsonGreaterThan = jsonCharOperator '>' JsonGreaterThan
+jsonGreaterThan = jsonCharOperator '>' JsGt
 
 jsonLessThan :: Parser ADT
-jsonLessThan = jsonCharOperator '<' JsonLessThan
+jsonLessThan = jsonCharOperator '<' JsLt
 
 jsonTernary :: Parser ADT
 jsonTernary = do
@@ -161,36 +174,34 @@ jsonTernary = do
   falseExpr <- parseExerciseA
   spaces
   charTok ')'
-  return $ JsonTernary condition trueExpr falseExpr
+  return $ JsTernary condition trueExpr falseExpr
 
-atomicExpression :: Parser ADT
-atomicExpression = jsonString <|> jsonBool <|> jsonNumber
-
-compositeExpression :: Parser ADT
-compositeExpression = 
-    jsonTernary <|>
-    jsonNot <|>
-    jsonAnd <|>
-    jsonOr <|>
-    jsonAdd <|>
-    jsonSubtract <|>
-    jsonMultiply <|>
-    jsonDivide <|>
-    jsonPower <|>
-    jsonEquals <|>
-    jsonNotEquals <|>
-    jsonGreaterThan <|>
-    jsonLessThan <|>
-    jsonList <|>
-    atomicExpression
-
+-- | Main parser for Exercise A that tries all the different parsers
 parseExerciseA :: Parser ADT
-parseExerciseA = compositeExpression
+parseExerciseA = 
+    jsonNumber 
+    <|> jsonBool 
+    <|> jsonList 
+    <|> jsonNot 
+    <|> jsonAnd 
+    <|> jsonOr 
+    <|> jsonAdd 
+    <|> jsonSubtract 
+    <|> jsonMultiply 
+    <|> jsonDivide 
+    <|> jsonPower 
+    <|> jsonEquals 
+    <|> jsonNotEquals 
+    <|> jsonGreaterThan 
+    <|> jsonLessThan 
+    <|> jsonTernary 
+    <|> jsonString
 
+-- | Helper class to determine if a parsed structure should be printed in multiple lines for exercise A
 class MultiLineA a where
     shouldUseMultiline :: a -> Bool
 instance MultiLineA ADT where
-    shouldUseMultiline (JsonTernary condition trueExpr falseExpr) =
+    shouldUseMultiline (JsTernary condition trueExpr falseExpr) =
         let conditionStr = prettyPrintExerciseA condition
             trueExprStr = prettyPrintExerciseA trueExpr
             falseExprStr = prettyPrintExerciseA falseExpr
@@ -199,34 +210,41 @@ instance MultiLineA ADT where
         in strLength > 42
     shouldUseMultiline _ = False
 
+-- | Pretty print functions for Exercise A structures
+-- | Convert the parsed ADT structures into readable format
+
+-- | Convert a list of ADTs into a string representation of a JSON array
 prettyPrintList :: [ADT] -> String
 prettyPrintList elements = "[" ++ intercalate ", " (map prettyPrintExerciseA elements) ++ "]"
 
+-- | Main pretty print function for Exercise A. This function converts an ADT structure into a readable string
 prettyPrintExerciseA :: ADT -> String
-prettyPrintExerciseA (JsonNumber n) = show n
-prettyPrintExerciseA (JsonString s) = show s
-prettyPrintExerciseA (JsonBool True) = "true"
-prettyPrintExerciseA (JsonBool False) = "false"
-prettyPrintExerciseA (JsonList elements) = prettyPrintList elements
-prettyPrintExerciseA (JsonNot expr) = "(!" ++ prettyPrintExerciseA expr ++ ")"
-prettyPrintExerciseA (JsonAnd expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " && " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonOr expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " || " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonAdd expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " + " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonSubtract expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " - " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonMultiply expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " * " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonDivide expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " / " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonPower expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " ** " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonEquals expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " === " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonNotEquals expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " !== " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonGreaterThan expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " > " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonLessThan expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " < " ++ prettyPrintExerciseA expr2 ++ ")"
-prettyPrintExerciseA (JsonTernary condition trueExpr falseExpr) =
+prettyPrintExerciseA (JsNum n) = show n  -- Convert JSON numbers directly using Haskell's show.
+prettyPrintExerciseA (JsStr s) = show s  -- Convert JSON strings with quotes.
+prettyPrintExerciseA (JsBool True) = "true"
+prettyPrintExerciseA (JsBool False) = "false"
+prettyPrintExerciseA (JsList elements) = prettyPrintList elements  -- Convert JSON list using the helper function.
+prettyPrintExerciseA (JsNot expr) = "(!" ++ prettyPrintExerciseA expr ++ ")"  -- Convert JSON logical NOT.
+-- For binary operations, surround with parentheses and insert the corresponding operator
+prettyPrintExerciseA (JsAnd expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " && " ++ prettyPrintExerciseA expr2 ++ ")"
+prettyPrintExerciseA (JsOr expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " || " ++ prettyPrintExerciseA expr2 ++ ")"
+prettyPrintExerciseA (JsAdd expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " + " ++ prettyPrintExerciseA expr2 ++ ")"
+prettyPrintExerciseA (JsSub expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " - " ++ prettyPrintExerciseA expr2 ++ ")"
+prettyPrintExerciseA (JsMul expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " * " ++ prettyPrintExerciseA expr2 ++ ")"
+prettyPrintExerciseA (JsDiv expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " / " ++ prettyPrintExerciseA expr2 ++ ")"
+prettyPrintExerciseA (JsPow expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " ** " ++ prettyPrintExerciseA expr2 ++ ")"
+prettyPrintExerciseA (JsEq expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " === " ++ prettyPrintExerciseA expr2 ++ ")"
+prettyPrintExerciseA (JsNotEquals expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " !== " ++ prettyPrintExerciseA expr2 ++ ")"
+prettyPrintExerciseA (JsGt expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " > " ++ prettyPrintExerciseA expr2 ++ ")"
+prettyPrintExerciseA (JsLt expr1 expr2) = "(" ++ prettyPrintExerciseA expr1 ++ " < " ++ prettyPrintExerciseA expr2 ++ ")"
+-- For ternary conditional, determine if it should be multi-line based on the combined length of its parts
+prettyPrintExerciseA (JsTernary condition trueExpr falseExpr) =
   let conditionStr = prettyPrintExerciseA condition
       trueExprStr = prettyPrintExerciseA trueExpr
       falseExprStr = prettyPrintExerciseA falseExpr
       combinedStr = conditionStr ++ trueExprStr ++ falseExprStr
       strLength = length combinedStr
-      isMultiline = shouldUseMultiline (JsonTernary condition trueExpr falseExpr)
+      isMultiline = shouldUseMultiline (JsTernary condition trueExpr falseExpr)
       newlineBeforeQuestion = if isMultiline then "\n" else ""
       newlineBeforeColon = if isMultiline then "\n" else ""
   in
@@ -235,16 +253,22 @@ prettyPrintExerciseA (JsonTernary condition trueExpr falseExpr) =
 
 -- | Exercise B
 
+-- | Determine if a character is a valid variable name character
 isVarName :: Char -> Bool
 isVarName c = isAlphaNum c || c == '_'
 
+-- | Helper function to parse a single statement in a block
+-- | This can be a constant declaration, an if-else block, or a code block
 statement :: Parser ADT
 statement = jsonConst <|> jsonIfElse <|> jsonBlock
+
+-- | Helper function to parse a simple condition, which is any valid expression in this context
 simpleCondition :: Parser ADT
 simpleCondition = do
     cond <- parseExerciseA
     return cond
 
+-- | Helper function to parse the "else" block of an if-else statement
 falseBlockOption :: Parser ADT
 falseBlockOption = do
     _ <- parseString "else"
@@ -252,6 +276,7 @@ falseBlockOption = do
     block <- jsonBlock
     return block
 
+-- | Parser for constant declarations in the format: const variable_name = value;
 jsonConst :: Parser ADT
 jsonConst = do
   _ <- parseString "const"
@@ -263,20 +288,23 @@ jsonConst = do
   value <- parseExerciseA
   spaces
   charTok ';'
-  return $ JsonConst (JsonString name) value
+  return $ JsConst (JsStr name) value
 
+-- | Parser for multiple constant declarations
 jsonConsts :: Parser ADT
 jsonConsts = do
   consts <- sepBy spaces jsonConst
-  return $ JsonConsts consts
+  return $ JsConsts consts
 
+-- | Parser for a block of code enclosed in curly braces
 jsonBlock :: Parser ADT
 jsonBlock = do
     _ <- charTok '{'
     statements <- sepBy spaces statement
     _ <- charTok '}'
-    return $ JsonBlock statements
+    return $ JsBlock statements
   
+-- | Parser for if-else statements
 jsonIfElse :: Parser ADT
 jsonIfElse = do
     _ <- parseString "if"
@@ -293,66 +321,83 @@ jsonIfElse = do
                         Nothing  -> []
     return $ JsonIfElse condition trueBlock falseBlocks
 
+-- | Main parser for Exercise B
 parseExerciseB :: Parser ADT
-parseExerciseB = jsonIfElse <|> jsonBlock <|> jsonConsts 
+parseExerciseB = jsonBlock <|> jsonIfElse <|> jsonConsts 
 
+-- | Helper class to determine if a parsed structure should be printed in multiple lines for Exercise B
 class MultiLineB b where
     shouldUseMultilineB :: b -> Bool
 instance MultiLineB ADT where
     shouldUseMultilineB adt = length (simplePrintB adt) > 42
       where
-        simplePrintB (JsonTernary condition trueExpr falseExpr) =
+        simplePrintB (JsTernary condition trueExpr falseExpr) =
           prettyPrintExerciseB condition ++
           prettyPrintExerciseB trueExpr ++
           prettyPrintExerciseB falseExpr
         simplePrintB other = prettyPrintExerciseB other
 
-prettyPrintJsonBlock :: [ADT] -> String
-prettyPrintJsonBlock adts
+-- | Pretty print functions for Exercise B structures
+-- | Convert the parsed ADT structures into readable format
+
+-- | Pretty print a block of code, deciding whether to use multiple lines based on the content
+prettyPrintJsBlock :: [ADT] -> String
+prettyPrintJsBlock adts
+    -- If any statement in the block should be multiline or if there are multiple statements, use the multiline format.
     | isMultilineBlock = "{\n" ++ unlines (map (\adt -> "  " ++ prettyPrintExerciseB adt ++ ";") adts) ++ "}"
+    -- Otherwise, use the inline format.
     | otherwise        = "{ " ++ intercalate "; " (map prettyPrintExerciseB adts) ++ (if not (null adts) then "; " else "") ++ "}"
   where
+    -- Determine if the block should be printed in multiple lines.
     isMultilineBlock = any shouldUseMultilineB adts || length adts > 1
-    combined = concatMap prettyPrintExerciseB adts
 
+-- | Pretty print the contents of a block for multiline format
 prettyPrintContents :: [ADT] -> String
 prettyPrintContents adts = "{\n" ++ unlines (map (\adt -> "  " ++ prettyPrintExerciseB adt) adts) ++ "\n}"
 
+-- | Pretty print the contents of a block for inline format
 prettyPrintInlineContents :: [ADT] -> String
 prettyPrintInlineContents adts = "{ " ++ intercalate "; " (map prettyPrintExerciseB adts) ++ " }"
 
+-- | Helper function to determine how to pretty print a block or a single statement
 prettyPrintBlockOrContent :: ADT -> String
-prettyPrintBlockOrContent adt@(JsonBlock _) = prettyPrintExerciseB adt
+prettyPrintBlockOrContent adt@(JsBlock _) = prettyPrintExerciseB adt
 prettyPrintBlockOrContent adt
     | shouldUseMultilineB adt = prettyPrintContents [adt]
     | otherwise               = prettyPrintInlineContents [adt]
 
+-- | Pretty print if-else statements
 prettyPrintIfElse :: ADT -> String
 prettyPrintIfElse (JsonIfElse condition trueBlock []) =
     "if ( " ++ prettyPrintExerciseA condition ++ " ) " ++ prettyPrintBlockOrContent trueBlock
 prettyPrintIfElse (JsonIfElse condition trueBlock falseBlocks) =
     "if ( " ++ prettyPrintExerciseA condition ++ " ) "
     ++ prettyPrintBlockOrContent trueBlock
+    -- Add a newline for multiline blocks, or a space for inline format.
     ++ (if shouldUseMultilineB trueBlock || any shouldUseMultilineB falseBlocks then "\n" else " ")
     ++ "else " ++ prettyPrintBlockOrContent (head falseBlocks)
 
+-- | Main pretty print function for Exercise B
 prettyPrintExerciseB :: ADT -> String
-prettyPrintExerciseB (JsonConst (JsonString name) value) =
+prettyPrintExerciseB (JsConst (JsStr name) value) =
   "const " ++ name ++ " = " ++ prettyPrintExerciseA value
-prettyPrintExerciseB (JsonConsts consts) =
+prettyPrintExerciseB (JsConsts consts) =
   intercalate "\n" (map prettyPrintExerciseB consts)
-prettyPrintExerciseB (JsonBlock adts) = prettyPrintJsonBlock adts
+prettyPrintExerciseB (JsBlock adts) = prettyPrintJsBlock adts
 prettyPrintExerciseB (JsonIfElse cond trueBlock falseBlocks) =
   prettyPrintIfElse (JsonIfElse cond trueBlock falseBlocks)
+-- Fallback to Exercise A's pretty print function for other structures.
 prettyPrintExerciseB other = prettyPrintExerciseA other
 
 -- | Exercise C
 
-functionNameParser :: Parser String
-functionNameParser = some (satisfy isAlphaNum)
+-- | Parser for function names 
+functionName :: Parser String
+functionName = parseSpan isVarName
 
-argumentParser :: Parser ADT
-argumentParser = parseExerciseA <|> JsonString <$> functionNameParser
+-- | Parser for function call arguments
+functionArguments :: Parser [ADT]
+functionArguments = sepBy (charTok ',') (spaces *> parseExerciseA <* spaces)
 
 jsonReturn :: Parser ADT
 jsonReturn = do
@@ -361,50 +406,43 @@ jsonReturn = do
     expr <- parseExerciseA
     _ <- charTok ';'
     return $ JsonReturn expr
-
--- Util function to handle spaces before and after a given parser
-spacesAround :: Parser a -> Parser a
-spacesAround p = do
-    spaces
-    result <- p
-    spaces
-    return result
-
--- Modified jsonFunctionCall to follow the provided logic
--- Temporarily comment out the original definition
--- jsonFunctionCall = ...
-
--- Use a stubbed version just for the sake of compiling
+  
 jsonFunctionCall :: Parser ADT
 jsonFunctionCall = do
-    fname <- spacesAround functionNameParser
-    _ <- spacesAround (charTok '(')
-    args <- sepBy argumentParser (spacesAround (charTok ','))
-    _ <- spacesAround (charTok ')')
+    _ <- spaces
+    fname <- functionName
+    _ <- spaces
+    _ <- is '('
+    _ <- spaces
+    args <- functionArguments
+    _ <- spaces
+    _ <- is ')'
+    _ <- spaces
+    _ <- is ';'
+    _ <- spaces
     return $ JsonFunctionCall fname args
-
 
 jsonFunction :: Parser ADT
 jsonFunction = do
     _ <- stringTok "function"
-    fname <- functionNameParser
+    fname <- functionName
     _ <- charTok '('
-    params <- sepBy (charTok ',') functionNameParser
+    params <- sepBy (charTok ',') functionName
     _ <- charTok ')'
     body <- jsonBlock
     return $ JsonFunction fname params body
 
 parseExerciseC :: Parser ADT
-parseExerciseC = jsonFunctionCall <|> jsonFunction
+parseExerciseC = jsonFunction <|> jsonFunctionCall
 
 extractReturns :: ADT -> [ADT]
 extractReturns (JsonReturn expr) = [expr]
-extractReturns (JsonBlock stmts) = concatMap extractReturns stmts
+extractReturns (JsBlock stmts) = concatMap extractReturns stmts
 extractReturns _ = []
 
 hasFunctionCalls :: ADT -> Bool
 hasFunctionCalls (JsonFunctionCall _ _) = True
-hasFunctionCalls (JsonBlock stmts) = any hasFunctionCalls stmts
+hasFunctionCalls (JsBlock stmts) = any hasFunctionCalls stmts
 hasFunctionCalls (JsonFunction _ _ body) = hasFunctionCalls body
 hasFunctionCalls _ = False
 
@@ -435,82 +473,19 @@ instance MultiLineC ADT where
         simplePrintC (JsonFunction _ _ body) =
           prettyPrintExerciseC body
         simplePrintC other = prettyPrintExerciseC other
-        
-prettyPrintFunctionCall :: ADT -> String
-prettyPrintFunctionCall (JsonFunctionCall name args) = 
-    name ++ "(" ++ (concat . intersperse ", " $ map prettyPrintExerciseA args) ++ ");"
 
-prettyPrintFunction :: ADT -> String
-prettyPrintFunction func@(JsonFunction name params body) 
-    | isTailRecursive (prettyPrintExerciseC func) = 
-        "function " ++ name ++ "(" ++ (concat . intersperse ", " $ params) ++ ") {\n  while(true) {\n" ++ 
-        (unlines . map ("    " ++) . lines $ prettyPrintExerciseB body) ++ 
-        "  }\n}"
-    | otherwise = 
-        "function " ++ name ++ "(" ++ (concat . intersperse ", " $ params) ++ ") " ++ prettyPrintExerciseB body
+prettyPrintBlock :: ADT -> String
+prettyPrintBlock (JsBlock stmts) = "{ " ++ intercalate " " (map prettyPrintExerciseC stmts) ++ " }"
+prettyPrintBlock other = prettyPrintExerciseC other
 
 prettyPrintExerciseC :: ADT -> String
+prettyPrintExerciseC (JsonFunctionCall fname args) =
+    fname ++ "(" ++ intercalate ", " (map prettyPrintExerciseA args) ++ ")"
 prettyPrintExerciseC (JsonFunction name args body) =
   let header = "function " ++ name ++ "(" ++ intercalate ", " args ++ ") "
       isMultiline = shouldUseMultilineC body
       bodyPrint
-        | isMultiline = "{\n" ++ (unlines . map ("  " ++) . lines $ prettyPrintExerciseC body) ++ "}"
-        | otherwise   = "{ " ++ prettyPrintExerciseC body ++ " }"
+        | isMultiline = "{\n" ++ (unlines . map ("  " ++) . lines $ prettyPrintBlock body) ++ "}"
+        | otherwise   = prettyPrintBlock body
   in header ++ bodyPrint
 prettyPrintExerciseC other = prettyPrintExerciseB other
-
-main :: IO ()
-main = do
-    let expressionsA = [
-            JsonNumber  123, -- 123
-            JsonNumber (-123), -- -123
-            JsonString "abc", -- "abc"
-            JsonBool True, -- true
-            JsonList [JsonNumber 1, JsonNumber 2 , JsonNumber 3], -- [1, 2, 3]
-            JsonList [JsonBool True, JsonBool False, JsonNumber 1], -- [true, false, 1]
-            JsonNot (JsonBool True), -- (!true)
-            JsonAnd (JsonNot (JsonBool False)) (JsonBool True), -- ((!false) && true)
-            JsonEquals (JsonMultiply (JsonAdd (JsonNumber 4) (JsonNumber 3)) (JsonNumber 2)) (JsonAdd (JsonNumber 4) (JsonMultiply (JsonNumber 3) (JsonNumber 2))), -- (((4 + 3) * 2) === (4 + (3 * 2)))
-            JsonTernary (JsonNumber 1) (JsonNumber 2) (JsonNumber 3), -- (1 ? 2 : 3)
-            JsonTernary (JsonBool True) (JsonNumber 1) (JsonNumber 2), -- (true ? 1 : 2)
-            JsonTernary (JsonGreaterThan (JsonNumber 1) (JsonNumber 2)) 
-                      (JsonAdd (JsonNumber 1) (JsonNumber 2)) 
-                      (JsonAdd (JsonNumber 3) (JsonNumber 4)), -- ((1 > 2) ? (1 + 2) : (3 + 4))
-            JsonTernary 
-                (JsonEquals 
-                    (JsonMultiply (JsonAdd (JsonNumber 4) (JsonNumber 3)) (JsonNumber 2)) 
-                    (JsonAdd (JsonNumber 4) (JsonMultiply (JsonNumber 3) (JsonNumber 2)))
-                ) 
-                (JsonAnd (JsonNot (JsonBool False)) (JsonBool True))
-                (JsonNumber 0)
-            -- ((((4 + 3) * 2) === (4 + (3 * 2)))\n? ((!false) && true)\n: 0)
-          ]
-    mapM_ (\expr -> putStrLn $ prettyPrintExerciseA expr) expressionsA
-    let expressionsB = [
-            JsonConst (JsonString "aVariable") (JsonNumber 4), -- const aVariable = 4;
-            JsonConst (JsonString "a2_3aBcD") (JsonNumber 1), -- const a2_3aBcD = 1;
-            JsonBlock [], -- { }
-            JsonBlock [JsonConst (JsonString "variable") (JsonNumber 1)], -- { const variable = 1; }
-            JsonBlock [
-                JsonConst (JsonString "a") (JsonNumber 1),
-                JsonIfElse 
-                    (JsonString "a") 
-                    (JsonBlock [JsonConst (JsonString "b") (JsonAdd (JsonString "a") (JsonNumber 1))]) 
-                    []
-            ], -- {\n const a = 1;\n if (a) { const b = (a + 1); } \n}
-            JsonBlock [
-                JsonConst (JsonString "variable") (JsonNumber 1),
-                JsonConst (JsonString "variable2") (JsonNumber 2)
-            ], -- {\n const variable = 1;\n const variable2 = 2; \n}
-            JsonIfElse (JsonBool True) (JsonBlock []) [], 
-            -- if (true) { }
-            JsonIfElse (JsonNumber 1) (JsonBlock [JsonConst (JsonString "a") (JsonNumber 1)]) [JsonBlock [JsonConst (JsonString "b") (JsonNumber 2)]], 
-            -- if (1) {\n const a = 1; \n} else { \nconst b = 2;\n\n}
-            JsonIfElse (JsonBool True) (JsonBlock []) [JsonBlock [JsonConst (JsonString "a") (JsonNumber 1)]], 
-            -- if ( true ) { } else { const a = 1; }
-            JsonIfElse (JsonNumber 1) (JsonBlock [JsonConst (JsonString "a") (JsonNumber 1), JsonConst (JsonString "b") (JsonNumber 2)]) [],
-            -- if (1){const a = 1;const b = 2; }
-            JsonIfElse (JsonAnd (JsonBool True) (JsonBool False)) (JsonBlock [JsonConst (JsonString "a") (JsonNumber 1)]) [JsonBlock [JsonConst (JsonString "b") (JsonNumber 2), JsonIfElse (JsonBool True) (JsonBlock [JsonConst (JsonString "c") (JsonAdd (JsonString "b") (JsonNumber 1))]) []]]
-            -- if ( (true && false) ){ \nconst a = 1;\n\n} else {\n const b = 2;\n\n if ( true ) { const c = (b + 1); }\n}
-          ]
-    mapM_ (\expr -> putStrLn $ prettyPrintExerciseB expr) expressionsB

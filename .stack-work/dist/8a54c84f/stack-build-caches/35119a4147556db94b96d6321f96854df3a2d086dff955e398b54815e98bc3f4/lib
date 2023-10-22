@@ -2,6 +2,8 @@ C:\Users\edwar\AppData\Local\Programs\stack\x86_64-windows\ghc-9.2.8\lib\x86_64-
   hash: f6c07f732dccc8af2172de0e281a32368312f72a92fc29aece1d635417c6c496
 D:\FIT2102\2023Assignment2\.stack-work\dist\8a54c84f\build\autogen\Paths_assignment2.hs:
   hash: 451d0b5f53cbe080f19b5594758da6f7babcf03d7dcdfc03b62372a640867353
+D:\FIT2102\2023Assignment2\.stack-work\dist\8a54c84f\build\autogen\cabal_macros.h:
+  hash: 5ee17263a519942b750e40fa8654f0075b6248b460da084e6ad99c9d46bd1d43
 D:\FIT2102\2023Assignment2\README.md:
   hash: bec9e398d9f254e3718fdc58ecb3c185697468d9d48988f11a5a377663f8b77a
 D:\FIT2102\2023Assignment2\assignment2.cabal:
@@ -9,7 +11,7 @@ D:\FIT2102\2023Assignment2\assignment2.cabal:
 D:\FIT2102\2023Assignment2\package.yaml:
   hash: c20826d2ecc83fb240412f55e569ea3fa04331d60db0fd4559049ccec1c9d3a9
 D:\FIT2102\2023Assignment2\src\Assignment.hs:
-  hash: 0a010d423763a3fc389fedef7922dd0b2697839af927b4756cfba6b9b6d348e4
+  hash: 9579f2880c4d1cf269ec1a9d7f2e22a064c7d6718b4702fc01217528ac8b0ded
 D:\FIT2102\2023Assignment2\src\Instances.hs:
   hash: 9bf64e240eb5334bbe3ed759c95309d14a251daadbd59aaca36005f78e01d084
 D:\FIT2102\2023Assignment2\src\Parser.hs:
